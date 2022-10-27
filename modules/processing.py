@@ -4,6 +4,7 @@ import os
 import sys
 
 import torch
+import torchvision.transforms as T
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 import random
@@ -286,12 +287,37 @@ def create_random_tensors(shape, seeds, subseeds=None, subseed_strength=0.0, see
             for j in range(cnt):
                 sampler_noises[j].append(devices.randn_without_seed(tuple(noise_shape)))
 
-        xs.append(noise)
+        # Saves the noise representation to PNG. 
+        # Very hacky but should be a good starting point.
+        # Only tested for batch size/count 1.
 
+        # Normalize to (0,1) before saving PNG:
+        minn = torch.min(noise)
+        maxx = torch.max(noise)
+        normalized_noise = (noise - minn) / (maxx - minn)
+        # Convert to PIL Image and save to root directory.
+        T.ToPILImage()(normalized_noise).save(f'{i}-{seed}.png')
+        # Convert saved image back to Tensor (saved to the correct device).
+        uploaded_noise = T.ToTensor()(Image.open(f'{i}-{seed}.png')).to(shared.device)
+        # Denormalize tensor.
+        uploaded_noise = uploaded_noise * (maxx - minn) + minn
+        # Print comparison.
+        if torch.all(uploaded_noise.eq(noise)):
+            print('The tensors are equal.')
+        else:
+            diff = torch.sub(noise, uploaded_noise)
+            print(f'Differences exist:\n\n{diff}\n\
+noise tensor norm:{torch.linalg.norm(noise)}\nnoise tensor to image to tensor norm:{torch.linalg.norm(uploaded_noise)}\ndiff norm:{torch.linalg.norm(diff)}\n\n\
+tensor max:{torch.max(noise)}\nnoise tensor to image to tensor max:{torch.max(uploaded_noise)}\ndiff max:{torch.max(diff)}\n\n\
+tensor min:{torch.min(noise)}\nnoise tensor to image to tensor min:{torch.min(uploaded_noise)}\ndiff min:{torch.min(diff)}')
+        # Now you can set noise to uploaded_noise (below), and compare with the same seed's previous output.
+        #noise = uploaded_noise
+        xs.append(noise)
     if sampler_noises is not None:
         p.sampler.sampler_noises = [torch.stack(n).to(shared.device) for n in sampler_noises]
 
     x = torch.stack(xs).to(shared.device)
+
     return x
 
 
