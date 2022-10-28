@@ -295,24 +295,29 @@ def create_random_tensors(shape, seeds, subseeds=None, subseed_strength=0.0, see
         minn = torch.min(noise)
         maxx = torch.max(noise)
         normalized_noise = (noise - minn) / (maxx - minn)
-        # Convert to PIL Image and save to root directory.
-        T.ToPILImage()(normalized_noise).save(f'{i}-{seed}.png')
+        # Convert to PIL Image and save noises to the same directory as txt2img (but in a noises subfolder).
+        T.ToPILImage()(normalized_noise).save(os.path.join(opts.outdir_txt2img_samples, 'noises', f'{i}-{seed}.png'))
         # Convert saved image back to Tensor (saved to the correct device).
-        uploaded_noise = T.ToTensor()(Image.open(f'{i}-{seed}.png')).to(shared.device)
+        uploaded_noise = T.ToTensor()(Image.open(os.path.join(opts.outdir_txt2img_samples, 'noises', f'{i}-{seed}.png'))).to(shared.device)
         # Denormalize tensor.
         uploaded_noise = uploaded_noise * (maxx - minn) + minn
         # Print comparison.
-        if torch.all(uploaded_noise.eq(noise)):
-            print('The tensors are equal.')
-        else:
-            diff = torch.sub(noise, uploaded_noise)
-            print(f'Differences exist:\n\n{diff}\n\
-noise tensor norm:{torch.linalg.norm(noise)}\nnoise tensor to image to tensor norm:{torch.linalg.norm(uploaded_noise)}\ndiff norm:{torch.linalg.norm(diff)}\n\n\
-tensor max:{torch.max(noise)}\nnoise tensor to image to tensor max:{torch.max(uploaded_noise)}\ndiff max:{torch.max(diff)}\n\n\
-tensor min:{torch.min(noise)}\nnoise tensor to image to tensor min:{torch.min(uploaded_noise)}\ndiff min:{torch.min(diff)}')
-        # Now you can set noise to uploaded_noise (below), and compare with the same seed's previous output.
+        def compare (a, b):
+            if torch.all(a.eq(b)):
+                print('The tensors are equal.')
+            else:
+                diff = torch.sub(a, b)
+                print(f'Differences exist:\n\n{diff}\n\
+noise tensor norm:{torch.linalg.norm(a)}\nnoise tensor to image to tensor norm:{torch.linalg.norm(b)}\ndiff norm:{torch.linalg.norm(diff)}\n\n\
+tensor max:{torch.max(a)}\nnoise tensor to image to tensor max:{torch.max(b)}\ndiff max:{torch.max(diff)}\n\n\
+tensor min:{torch.min(a)}\nnoise tensor to image to tensor min:{torch.min(b)}\ndiff min:{torch.min(diff)}')
+        print('@@@@@@@@ NOISE COMPARISON: @@@@@@@@\n')
+        compare(noise, uploaded_noise)
+        # Now you can set noise to its uploaded counterparts (uncommenting 2 lines below), and compare with the same seed's previous output.
+        # Also make sure seed is set internally to the uploaded seed (apparently this has to match.)
         #noise = uploaded_noise
         xs.append(noise)
+
     if sampler_noises is not None:
         p.sampler.sampler_noises = [torch.stack(n).to(shared.device) for n in sampler_noises]
 
